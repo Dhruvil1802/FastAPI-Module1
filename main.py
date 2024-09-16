@@ -1,7 +1,12 @@
+from datetime import datetime, time, timedelta
 from enum import Enum
+from typing import Optional
+from uuid import UUID
 
-from fastapi import FastAPI, Query
-from pydantic import BaseModel
+from fastapi import Body, Cookie, FastAPI, Header, Query, Path
+from pydantic import BaseModel, Field, HttpUrl
+
+app = FastAPI()
 
 app = FastAPI()
 
@@ -121,3 +126,163 @@ async def search_items(
     return result_set
 
 
+@app.get("/items_hidden")
+async def hidden_query_route(
+    hidden_query: str | None = Query(None, include_in_schema=False)
+):
+    if hidden_query:
+        return {"hidden_query": hidden_query}
+    return {"hidden_query": "Not found"}
+
+@app.get("/items_validation/{item_id}")
+async def read_items_validation(
+    *,
+    #item_id must be path parameter
+    item_id: int = Path(..., title="The ID of the item to get", gt=10, le=100),
+    q: str = "hello",
+    #size must be query parameter
+    size: float = Query(..., gt=0, lt=7.75)
+):
+    
+    results = {"item_id": item_id, "size": size}
+    if q:
+        results.update({"q": q})
+    return results
+
+
+class Item(BaseModel):
+    name: str
+    description: str | None = Field(
+        None, title="The description of the item", max_length=300
+    )
+    price: float = Field(..., gt=0, description="The price must be greater than zero.")
+    tax: float | None = None
+
+#passed request body in query parameter
+@app.put("/items/{item_id}")
+async def update_item1(item_id: int, item: Item = Body(..., embed=True)):
+    results = {"item_id": item_id, "item": item}
+    return results
+
+class Image(BaseModel):
+    url: HttpUrl
+    name: str
+
+
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+    tags: set[str] = []
+    image: list[Image] | None = None
+
+
+class Offer(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    items: list[Item]
+
+
+@app.put("/items/{item_id}")
+async def update_item(item_id: int, item: Item):
+    results = {"item_id": item_id, "item": item}
+    return results
+
+@app.post("/offers")
+async def create_offer(offer: Offer = Body(..., embed=True)):
+    return offer
+
+
+@app.post("/images/multiple")
+async def create_multiple_images(images: list[Image]):
+    return images
+
+
+@app.post("/blah")
+async def create_some_blahs(blahs: dict[int, float]):
+    return blahs
+
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+
+
+
+@app.put("/items/{item_id}")
+async def update_items2(
+    item_id: int,
+    item: Item = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "A normal example",
+                "description": "A __normal__ item works _correctly_",
+                "value": {
+                    "name": "Foo",
+                    "description": "A very nice Item",
+                    "price": 16.25,
+                    "tax": 1.67,
+                },
+            },          
+            "converted": {
+                "summary": "An example with converted data",
+                "description": "FastAPI can convert price `strings` to actual `numbers` automatically",
+                "value": {"name": "Bar", "price": "16.25"},
+            },
+            "invalid": {
+                "summary": "Invalid data is rejected with an error",
+                "description": "Hello youtubers",
+                "value": {"name": "Baz", "price": "sixteen point two five"},
+            },
+        },
+    ),
+):
+    results = {"item_id": item_id, "item": item}
+    return results
+
+
+@app.put("/items/{item_id}")
+async def read_items(
+    item_id: UUID,
+    start_date: Optional[datetime] = Body(None),
+    end_date: Optional[datetime] = Body(None),
+    repeat_at: Optional[time] = Body(None),
+    process_after: Optional[timedelta] = Body(None),
+):
+    if start_date and process_after :
+        start_process = start_date + process_after 
+    else:
+        None
+    if start_process and end_date:
+        duration = end_date - start_process 
+    else:
+        None
+    return {
+        "item_id": item_id,
+        "start_date": start_date,
+        "end_date": end_date,
+        "repeat_at": repeat_at,
+        "process_after": process_after,
+        "start_process": start_process,
+        "duration": duration,
+    }
+
+@app.get("/items")
+async def read_items(
+    cookie_id: str | None = Cookie(None),
+    accept_encoding: str | None = Header(None),
+    sec_ch_ua: str | None = Header(None),
+    user_agent: str | None = Header(None),
+    x_token: list[str] | None = Header(None),
+):
+    return {
+        "cookie_id": cookie_id,
+        "Accept-Encoding": accept_encoding,
+        "sec-ch-ua": sec_ch_ua,
+        "User-Agent": user_agent,
+        "X-Token values": x_token,
+    }
